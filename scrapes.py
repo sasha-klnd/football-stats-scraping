@@ -1,4 +1,5 @@
 import pandas as pd
+import time
 
 def MLS_gk_scrape():
 
@@ -35,4 +36,33 @@ def MLS_gk_scrape():
         "ca460650/San-Jose-Earthquakes-Stats"
     ]
     
+    gklist = []
+
+    for i in range(5):
+
+        time.sleep(5)
+
+        # Retrieve GA and SoTA
+        sotadf = pd.read_html(baseurl + teamIDs[i], attrs={"id":"stats_keeper_22"})[0]
+        sotadf = sotadf.droplevel(0, axis=1)
+        sotadf = sotadf.drop([3,4], axis='rows')
+        sotadf = sotadf.loc[:, ['Player', 'GA', 'SoTA']]
+
+        time.sleep(5)
+
+        # Retrieve PSxG
+        psxgdf = pd.read_html(baseurl + teamIDs[i], attrs={"id":"stats_keeper_adv_22"})[0]
+        psxgdf = psxgdf.droplevel(0, axis=1)
+        psxgdf = psxgdf.drop([3,4], axis='rows')
+        psxgdf = psxgdf.loc[:, ['PSxG']]
+
+        # Concatenate
+        team_gk_df = pd.concat([sotadf, psxgdf], axis = 1)
+
+        for row in team_gk_df.values.tolist():
+            gklist.append(row)
     
+    full_gk_df = pd.DataFrame(gklist)
+    full_gk_df.columns = ['Player', 'GA', 'SoTA', 'PSxG']
+
+    print(full_gk_df.head())
