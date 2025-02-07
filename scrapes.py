@@ -74,7 +74,7 @@ def MLS_gk_scrape_per_table():
 
     return full_gk_df
 
-def mls_gk_scrape():
+def mls_gk_scrape(filename):
 
     delay = 10   # Avoid 429
     baseurl = "https://fbref.com/en/squads/"
@@ -112,6 +112,8 @@ def mls_gk_scrape():
 
     all_data_ls = []
 
+    # len(teamids)
+
     for i in range(len(teamids)):
 
         print(f"Retrieving '{teamids[i]}'...")
@@ -135,7 +137,7 @@ def mls_gk_scrape():
 
             # Rest of player data
             for td in gkrows[i].find_all('td')[:-1]:
-                row_ls.append(td.text)
+                row_ls.append(td.text.replace(",", ""))
 
             # Retrieve PSxG from advanced goalkeeping table
             row_ls.append(agkrows[i].find_all('td')[9].text)
@@ -153,13 +155,19 @@ def mls_gk_scrape():
 
     # Drop unnecessary rows
     # Edit this to keep whichever stats you want
-    df = df.loc[:, ['Player', 'GA', 'SoTA', 'PSxG']]
+    df = df.loc[:, ['Player', 'Min', '90s', 'GA', 'SoTA', 'PSxG']]
+
+    df['Min'] = df['Min'].astype(int)
+    df['90s'] = df['90s'].astype(float)
+    df['GA'] = df['GA'].astype(int)
+    df['SoTA'] = df['SoTA'].astype(int)
+    df['PSxG'] = df['PSxG'].astype(float)
 
     # Add some custom metrics
     df['GSAA'] = (round(df['PSxG'] - df['GA'], 3))
     df['GSAA%'] = (round((df['GSAA'] / df['SoTA']) * 100, 3))
 
     # Write
-    df.to_csv('ga-sota-psxg.csv', index=False)
+    df.to_csv(filename, index=False)
 
     return
