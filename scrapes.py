@@ -171,3 +171,37 @@ def mls_gk_scrape(filename):
     df.to_csv(filename, index=False)
 
     return
+
+def fotmob_league_scrape(filename):
+    
+    url = 'https://www.fotmob.com/players/303919/jordan-pickford'
+
+    page = requests.get(url).text
+    soup = BeautifulSoup(page, 'html.parser')
+
+    all_data = []
+
+    # Retrieve column headers, i.e. stat names
+    headers_raw = soup.find_all('div', class_ = 'css-2duihq-StatTitle e1uibvo11')
+    headers_ls = ['Player'] + [header.text for header in headers_raw]
+
+    # Loop for each player
+
+    player_data = []
+
+    # Retrieve name
+    player_data.append(soup.find('h1', class_='css-zt63wq-PlayerNameCSS eopqf5x1').text)
+
+    # Retrieve stats
+    data_raw = soup.find_all('div', class_='css-jb6lgd-StatValue e1uibvo12')
+    player_data += [data.text for data in data_raw]
+
+
+    all_data.append(player_data)
+
+    df = pd.DataFrame(all_data)
+    df.columns = headers_ls
+
+    df.to_csv(filename, index=False)
+
+fotmob_league_scrape('pickfordstats.csv')
