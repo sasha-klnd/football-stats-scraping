@@ -1,7 +1,13 @@
-import pandas as pd
 import time
+import os
+import pandas as pd
 from bs4 import BeautifulSoup
 import requests
+
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
 
 # Older method using pd.read_html -- prone to 429 responses
 def MLS_gk_scrape_per_table():
@@ -172,36 +178,85 @@ def mls_gk_scrape(filename):
 
     return
 
-def fotmob_league_scrape(filename):
+def fotmob_league_scrape():
+
+    # Choose the league URL
+    league_url = 'https://www.fotmob.com/leagues/47/overview/premier-league'
+    base_team_url = 'https://www.fotmob.com/teams/'
+    base_url = 'https://fotmob.com'
     
-    url = 'https://www.fotmob.com/players/303919/jordan-pickford'
+    # Set up chrome driver
+    if not os.path.exists('./DRIVERPATH.txt'):
+        print('Error: DRIVERPATH.txt could not be found.')
+        return
+    else:
+        with open('./DRIVERPATH.txt', 'r') as file:
+            driverpath = file.readline()
 
-    page = requests.get(url).text
-    soup = BeautifulSoup(page, 'html.parser')
+            if not driverpath:
+                print('Error: DRIVERPATH.txt is empty.')
+                return
 
-    all_data = []
+    service = Service(executable_path=f'{driverpath + '/chromedriver.exe'}')
+    driver = webdriver.Chrome(service=service)
+    driver.get(league_url)
+    driver.implicitly_wait(5)
 
-    # Retrieve column headers, i.e. stat names
-    headers_raw = soup.find_all('div', class_ = 'css-2duihq-StatTitle e1uibvo11')
-    headers_ls = ['Player'] + [header.text for header in headers_raw]
+    # Find each team in league and then find keeper
+    teams = driver.find_elements(By.CLASS_NAME, "exhos731")
 
-    # Loop for each player
+    team_urls = []
+    gk_urls = []
 
-    player_data = []
+    # Isolate the url for each team
+    for i in range(6,7):
+        team_urls.append(teams[i].get_attribute('href')[29:])
+    
 
-    # Retrieve name
-    player_data.append(soup.find('h1', class_='css-zt63wq-PlayerNameCSS eopqf5x1').text)
+    # On each team page retrieve GK
+    for url in team_urls:
+        driver.get(base_team_url + url)
+        gkdiv = driver.find_elements(By.CLASS_NAME, "ejpepe01")[-1]
+        gk_urls.append(gkdiv.find_element(By.TAG_NAME, 'a').get_attribute('href'))
+        time.sleep(3)
 
-    # Retrieve stats
-    data_raw = soup.find_all('div', class_='css-jb6lgd-StatValue e1uibvo12')
-    player_data += [data.text for data in data_raw]
+    driver.quit()
 
+    # Use BeautifulSoup from this point onwards for scraping player stats
+    all_gk_bs_data = []
+    
+    for i in range(len(gk_urls)):
+        page = requests.get(gk_urls[i]).text
+        soup = BeautifulSoup(page, 'html.parser')
 
-    all_data.append(player_data)
+        # Retrieve column headers, i.e. stat names
+        headers_raw = soup.find_all('div', class_ = 'css-2duihq-StatTitle e1uibvo11')
+        headers_ls = ['Player'] + [header.text for header in headers_raw]
 
-    df = pd.DataFrame(all_data)
-    df.columns = headers_ls
+        # Loop for each player
 
-    df.to_csv(filename, index=False)
+        player_data = []
 
-fotmob_league_scrape('pickfordstats.csv')
+        # Retrieve name
+        player_data.append(soup.find('h1', class_='css-zt63wq-PlayerNameCSS eopqf5x1').text)
+
+        # Retrieve stats
+        data_raw = soup.find_all('div', class_='css-jb6lgd-StatValue e1uibvo12')
+        player_data += [data.text for data in data_raw]
+
+        if len(player_data) == 14:
+            player_data = player_data[0:6] + [0,0,0] + player_data[6:]
+
+        all_gk_bs_data.append(player_data)
+
+    for row in all_gk_bs_data:
+        print(row)
+
+    # Figure out solution for different stats
+
+    # df = pd.DataFrame(all_gk_data)
+    # df.columns = headers_ls
+
+    # print(df)
+
+    # df.to_csv(filename, index=False)
