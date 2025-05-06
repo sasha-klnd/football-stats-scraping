@@ -178,14 +178,15 @@ def mls_gk_scrape(filename):
 
     return
 
-def fotmob_league_scrape():
+def fotmob_prem_gk_urls():
+    # This method writes the GK URLs to a text file to minimize the number of scrapes that
+    # need to be done -- they take a while because of the added delays
 
     # Choose the league URL
     league_url = 'https://www.fotmob.com/leagues/47/overview/premier-league'
     base_team_url = 'https://www.fotmob.com/teams/'
-    base_url = 'https://fotmob.com'
     
-    # Set up chrome driver
+    # Set up chromium driver
     if not os.path.exists('./DRIVERPATH.txt'):
         print('Error: DRIVERPATH.txt could not be found.')
         return
@@ -202,61 +203,85 @@ def fotmob_league_scrape():
     driver.get(league_url)
     driver.implicitly_wait(5)
 
-    # Find each team in league and then find keeper
-    teams = driver.find_elements(By.CLASS_NAME, "exhos731")
+    # Find each team in league, and then find the keeper
+    teams = driver.find_elements(By.CLASS_NAME, "eo46u7w1")
 
     team_urls = []
     gk_urls = []
 
     # Isolate the url for each team
-    for i in range(6,7):
+    for i in range(len(teams)):
         team_urls.append(teams[i].get_attribute('href')[29:])
-    
 
     # On each team page retrieve GK
     for url in team_urls:
         driver.get(base_team_url + url)
-        gkdiv = driver.find_elements(By.CLASS_NAME, "ejpepe01")[-1]
-        gk_urls.append(gkdiv.find_element(By.TAG_NAME, 'a').get_attribute('href'))
+        gk_div = driver.find_elements(By.CLASS_NAME, "ejpepe01")[-1]
+        gk_urls.append(gk_div.find_element(By.TAG_NAME, 'a').get_attribute('href'))
         time.sleep(3)
 
     driver.quit()
 
-    # Use BeautifulSoup from this point onwards for scraping player stats
+    with open('./fotmob_prem_gk_urls.txt', 'w') as file:
+        file.write(gk_urls[0])
+        for i in range(1, len(gk_urls)):
+            file.write(f'\n{gk_urls[i]}')
+    return
+
+def fotmob_prem_gk_stats():
+    # This method uses the text file output of the fotmob_pl_gk_urls() method
+
+    # Read in the URLs from the file
+    gk_urls = []
+    with open('./pl_gk_urls.txt', 'r') as file:
+        while(True):
+            url = file.readline()
+            if not url:
+                break
+            gk_urls.append(url.strip('\n'))
+
+    # Will use BeautifulSoup for scraping player stats
+
+    # First row will be complete set of stat names -- some players are missing stats
+    complete_stats = ['Name', 'Saves','Save percentage','Goals conceded','Goals prevented',
+                       'Clean sheets','Penalties faced','Penalty goals conceded','Penalty saves',
+                       'Error led to goal','Acted as sweeper','High claim','Pass accuracy',
+                       'Accurate long balls','Long ball accuracy','Assists','Yellow cards','Red cards']
     all_gk_bs_data = []
     
+
     for i in range(len(gk_urls)):
+        # Loop for each player
         page = requests.get(gk_urls[i]).text
         soup = BeautifulSoup(page, 'html.parser')
+        player_data = [0] * 18
 
-        # Retrieve column headers, i.e. stat names
-        headers_raw = soup.find_all('div', class_ = 'css-2duihq-StatTitle e1uibvo11')
-        headers_ls = ['Player'] + [header.text for header in headers_raw]
+        # Retrieve player name
+        player_data[0] = (soup.find('h1', class_='e97um7g1').text)
 
-        # Loop for each player
+        # Retrieve stat names and values
+        stat_names = soup.find_all('div', class_ = 'e1uibvo11')
+        stat_names = [data.text for data in stat_names]
+        stat_values = soup.find_all('div', class_='e1uibvo12')
+        stat_values = [data.text for data in stat_values]
 
-        player_data = []
+        # For each name in stat_names, fill the corresponding column in player_data with the 
+        # value in stat_values. All fields that do not get filled this way will default to a value
+        # of 0, so we get a complete row of stats even if the player card on FotMob is incomplete
+        for i in range(len(stat_names)):
+            name = stat_names[i]
+            lookup_index = complete_stats.index(name)
 
-        # Retrieve name
-        player_data.append(soup.find('h1', class_='css-zt63wq-PlayerNameCSS eopqf5x1').text)
-
-        # Retrieve stats
-        data_raw = soup.find_all('div', class_='css-jb6lgd-StatValue e1uibvo12')
-        player_data += [data.text for data in data_raw]
-
-        if len(player_data) == 14:
-            player_data = player_data[0:6] + [0,0,0] + player_data[6:]
+            # Type conversions
+            if '.' in stat_values[i]:
+                player_data[lookup_index] = float(stat_values[i].rstrip("%"))
+            else:
+                player_data[lookup_index] = int(stat_values[i])
 
         all_gk_bs_data.append(player_data)
 
-    for row in all_gk_bs_data:
-        print(row)
+    # Convert to dataframe and write to csv
+    df = pd.DataFrame(all_gk_bs_data)
+    df.columns = complete_stats
 
-    # Figure out solution for different stats
-
-    # df = pd.DataFrame(all_gk_data)
-    # df.columns = headers_ls
-
-    # print(df)
-
-    # df.to_csv(filename, index=False)
+    df.to_csv('fotmob_prem_gk_stats.csv', index=False)
