@@ -290,4 +290,4 @@ def fotmob_prem_gk_stats():
     df = pd.DataFrame(all_gk_bs_data)
     df.columns = complete_stats
 
-    df.to_csv('fotmob_prem_gk_stats.csv', index=False)
+    df.to_csv('fotmob_prem_gk_stats.csv', index=False, encoding='utf-8-sig')
