@@ -231,9 +231,15 @@ def fotmob_prem_gk_urls():
 def fotmob_prem_gk_stats():
     # This method uses the text file output of the fotmob_pl_gk_urls() method
 
+    # Check that file exists
+    if not os.path.exists('./fotmob_prem_gk_urls.txt'):
+        print('ERROR: fotmob_prem_gk_urls.txt could not be found.')
+        print('Try running the fotmob_prem_gk_urls method first.')
+        return
+
     # Read in the URLs from the file
     gk_urls = []
-    with open('./pl_gk_urls.txt', 'r') as file:
+    with open('./fotmob_prem_gk_urls.txt', 'r') as file:
         while(True):
             url = file.readline()
             if not url:
