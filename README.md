@@ -22,6 +22,6 @@ In the repository folder, create a new text file called `DRIVERPATH.txt`, and on
 
 All the scraping methods are found in the `scrapes.py` file. 
 
-The `fotmob_prem_gk_urls` method will create a text file `fotmob_prem_gk_urls.txt` in the repository folder containing the URLs to the 20 Premier League goalkeeper stats pages on FotMob. Originall this method was combined with `fotmob_prem_gk_stats`, but it was needlessly long to scrape every goalkeeper URL for each stats scape. Now, you can run this method just once to establish the URLs file.
+The `fotmob_prem_gk_urls` method will create a text file `fotmob_prem_gk_urls.txt` in the repository folder containing the URLs to the 20 Premier League goalkeeper stats pages on FotMob. Originally this method was combined with `fotmob_prem_gk_stats`, but it was needlessly long to scrape every goalkeeper URL every time you wanted to fetch the most recent stats. Now, you can run this method just once to establish the URLs file.
 
 The `fotmob_prem_gk_stats` method will use the `fotmob_prem_gk_urls.txt` to scrape the stats for each goalkeeper URL. It will create a new CSV file `fotmob_prem_gk_stats.csv` in the repository folder, which can easily be converted into a DataFrame for further manipulation.
