@@ -178,6 +178,21 @@ def mls_gk_scrape(filename):
 
     return
 
+def validate_chromedriver():
+    # Validates that the directory containing the Chrome Driver exists and if so, returns the path
+    if not os.path.exists('./DRIVERPATH.txt'):
+        print('Error: DRIVERPATH.txt could not be found.')
+        return None
+    
+    with open('./DRIVERPATH.txt', 'r') as file:
+        driverpath = file.readline()
+
+        if not driverpath:
+            print('Error: DRIVERPATH.txt is empty.')
+            return None
+        else:
+            return driverpath
+
 def fotmob_prem_gk_urls():
     # This method writes the GK URLs to a text file to minimize the number of scrapes that
     # need to be done -- they take a while because of the added delays
@@ -187,16 +202,10 @@ def fotmob_prem_gk_urls():
     base_team_url = 'https://www.fotmob.com/teams/'
     
     # Set up chromium driver
-    if not os.path.exists('./DRIVERPATH.txt'):
-        print('Error: DRIVERPATH.txt could not be found.')
+    driverpath = validate_chromedriver()
+    if not driverpath:
+        print("ERROR")
         return
-    else:
-        with open('./DRIVERPATH.txt', 'r') as file:
-            driverpath = file.readline()
-
-            if not driverpath:
-                print('Error: DRIVERPATH.txt is empty.')
-                return
 
     service = Service(executable_path=f'{driverpath + '/chromedriver.exe'}')
     driver = webdriver.Chrome(service=service)
@@ -291,3 +300,4 @@ def fotmob_prem_gk_stats():
     df.columns = complete_stats
 
     df.to_csv('fotmob_prem_gk_stats.csv', index=False, encoding='utf-8-sig')
+
