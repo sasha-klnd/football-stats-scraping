@@ -11,7 +11,7 @@ pip install -r requirements.txt
 
 # Setting up a Chromium Driver
 Some scraping methods use a Chromium Driver with Selenium. 
-If you don't already have a Chromium Driver downloaded, you can [do it here](https://developer.chrome.com/docs/chromedriver/downloads).
+If you don't already have a Chromium Driver downloaded, you can [do it here](https://googlechromelabs.github.io/chrome-for-testing/).
 
 Your installation of Chrome needs to match the version of the Chromium Driver. The easiest way to ensure this is to open the Settings page in Chrome, go to About Chrome, and check for any updates. Once Chrome is up to date, go to the above link and download the Chromium Driver for your system with the same version.
 
