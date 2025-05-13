@@ -8,6 +8,7 @@ from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 # Older method using pd.read_html -- prone to 429 responses
 def MLS_gk_scrape_per_table():
@@ -301,3 +302,52 @@ def fotmob_prem_gk_stats():
 
     df.to_csv('fotmob_prem_gk_stats.csv', index=False, encoding='utf-8-sig')
 
+def transfermarkt_mls_transfers():
+
+    baselink = "http://transfermarkt.com/major-league-soccer/transfers/wettbewerb/MLS1"
+    
+    # Set up chromium driver
+    driverpath = validate_chromedriver()
+    if not driverpath:
+        print("ERROR")
+        return
+
+    service = Service(executable_path=f'{driverpath + '/chromedriver.exe'}')
+    driver = webdriver.Chrome(service=service)
+    driver.get(baselink)
+    
+    # Close ad popup
+    try:
+        iframe = WebDriverWait(driver, 10).until(EC.frame_to_be_available_and_switch_to_it((By.XPATH, "//iframe[@id='sp_message_iframe_953358']")))
+        button = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//button[text()='Accept & continue']")))
+        button.click()
+    except:
+        print("Error: Could not find the button")
+
+    # Step out of iframe
+    driver.switch_to.default_content()
+    
+    # All clubs are contained in divs with class "box". Need to select only those divs that are clubs, exclude the rest
+    large8  = WebDriverWait(driver, 10).until(EC.visibility_of_element_located((By.CLASS_NAME, "large-8")))
+    all_div_box = large8.find_elements(By.CLASS_NAME, "box")
+
+    clubs = all_div_box[4:34]
+    
+    # More sophisticated method -- look at implementing later
+    # for div in all_div_box:
+    #     try:
+    #         # The clubs contain a h2 tag
+    #         div.find_element(By.TAG_NAME, "h2")
+    #         clubs.append(div)
+    #     except:
+    #         continue
+    
+    print(f"Found {len(clubs)} clubs.")
+
+    for club in clubs:
+        name = club.find_element(By.TAG_NAME, "h2").find_elements(By.TAG_NAME, "a")[1].text
+        print(name)
+
+    driver.quit()
+
+    return

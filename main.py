@@ -5,7 +5,7 @@ import random
 def main():
     # Call some of the scraping methods here
 
-    fotmob_prem_gk_stats()
+    transfermarkt_mls_transfers()
 
 if __name__ == "__main__":
     main()
