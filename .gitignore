@@ -1,5 +1,5 @@
 # Data files produced by the program
-fotmob_prem_gk_stats.csv
+*.csv
 fotmob_prem_gk_urls.txt
 
 # Path for Chromium Driver
