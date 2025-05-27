@@ -6,7 +6,6 @@ import requests
 import re
 
 from selenium import webdriver
-import selenium.common
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -315,11 +314,12 @@ def transfermarkt_mls_transfers():
         print("ERROR")
         return
 
-    options = webdriver.ChromeOptions()
-    options.add_argument('--ignore-certificate-errors')
-    options.add_argument('--ignore-ssl-errors')
+    chrome_options = webdriver.ChromeOptions()
+    chrome_options.add_argument('log-level=3') # Suppress SSL errors from terminal
+    chrome_options.add_argument('--block-new-web-content')
+
     service = Service(executable_path=f'{driverpath + '/chromedriver.exe'}')
-    driver = webdriver.Chrome(service=service, options=options)
+    driver = webdriver.Chrome(service=service, options=chrome_options)
     driver.get(baselink)
     driver.maximize_window()
     
@@ -348,12 +348,11 @@ def transfermarkt_mls_transfers():
     #         clubs.append(div)
     #     except:
     #         continue
-    
-    print(f"Found {len(all_club_elements)} clubs.")
 
     # Define useful variables for scraping procedure
     original_window = driver.current_window_handle
     mapClubToLeague = dict()                        # Cache that will map a club to a league
+    concat_dataframes = False                       # Global DF containing all stats will be created for first club, afterwards all other clubs will be concatenated
 
     # Table headers are shared for all clubs -- only need to retrieve once
     test_club = all_club_elements[0]
@@ -373,8 +372,6 @@ def transfermarkt_mls_transfers():
     table_headers_text[0] = "Name"
     table_headers_text.insert(0, "JoinedClub")
     
-    concat_dataframes = False       # Global DF containing all stats will be created for first club, afterwards all other clubs will be concatenated
-
     # Now iterate through all clubs to retrieve table data
     for club in all_club_elements:
         club_data_list = [] # Array containing entire table of data for one club
@@ -384,21 +381,18 @@ def transfermarkt_mls_transfers():
 
         for row in all_rows:
             cells = row.find_elements(By.TAG_NAME, "td")
-            cells = cells[:4] + [cells[5], cells[7], cells[8]] # Drop cells at index 4 and 6, used on the webpage for display purposes only
-
             player_name = cells[0].find_element(By.TAG_NAME, "div").find_element(By.TAG_NAME, "span").find_element(By.TAG_NAME, "a").text
             age = int(cells[1].text)
             nat = cells[2].find_element(By.TAG_NAME, "img").get_attribute("title")
             pos = cells[3].text
-            mv = cells[4].text
+            mv = cells[5].text
 
             # The 'left' column will be split into leftClub and leftLeague
             # The league will need to be retrieved with a further web scrape and stored in a cache to improve performance
-            leftCell = cells[5].find_element(By.TAG_NAME, "a")
+            leftCell = cells[7].find_element(By.TAG_NAME, "a")
             leftClub = leftCell.get_attribute("title")
 
             if leftClub == "Without Club":
-                leftClub = ""
                 leftLeague = ""
             elif leftClub in mapClubToLeague:
                 leftLeague = mapClubToLeague[leftClub] # Used cached result, if available
@@ -408,36 +402,36 @@ def transfermarkt_mls_transfers():
                 driver.get(clubPageURL)
 
                 try:
-                    leagueElement = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, "data-header__club-info")))
+                    leagueElement = WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.CLASS_NAME, "data-header__club-info")))
                     leftLeague = leagueElement.find_element(By.TAG_NAME, "span").find_element(By.TAG_NAME, "a").text.strip()
                 except:
                     leftLeague = ""
 
+                # Place the retrieved pairing in the dictionary
                 mapClubToLeague[leftClub] = leftLeague
 
                 driver.close()
                 driver.switch_to.window(original_window)
 
-            fee = cells[6].find_element(By.TAG_NAME, "a").text
+            fee = cells[8].find_element(By.TAG_NAME, "a").text
 
             # Covert mv cell to numeric value
             if "k" in mv:
-                mv_numeric = mv[re.search("\d", mv).span()[0]:].rstrip("k")
+                mv_numeric = mv[re.search(r"\d", mv).span()[0]:].rstrip("k")
                 mv_numeric = float(mv_numeric) * 1000
             elif "m" in mv:
-                mv_numeric = mv[re.search("\d", mv).span()[0]:].rstrip("m")
+                mv_numeric = mv[re.search(r"\d", mv).span()[0]:].rstrip("m")
                 mv_numeric = float(mv_numeric) * 1000000
             
             # Convert fee cell to numeric value
             if "k" in fee:
-                fee_numeric = fee[re.search("\d", fee).span()[0]:].rstrip("k")
+                fee_numeric = fee[re.search(r"\d", fee).span()[0]:].rstrip("k")
                 fee_numeric = float(fee_numeric) * 1000
             elif "m" in fee:
-                fee_numeric = fee[re.search("\d", fee).span()[0]:].rstrip("m")
+                fee_numeric = fee[re.search(r"\d", fee).span()[0]:].rstrip("m")
                 fee_numeric = float(fee_numeric) * 1000000
 
-            single_row = [club_name, player_name, age, nat, pos, mv_numeric, leftClub, leftLeague, fee_numeric]
-            club_data_list.append(single_row)
+            club_data_list.append([club_name, player_name, age, nat, pos, mv_numeric, leftClub, leftLeague, fee_numeric])
 
         if not concat_dataframes:
             # On first pass, simply create the global dataframe since there is nothing to concatenate
@@ -448,9 +442,124 @@ def transfermarkt_mls_transfers():
             club_data_df = pd.DataFrame(club_data_list, columns=table_headers_text)
             all_mls_incoming_transfers = pd.concat([all_mls_incoming_transfers, club_data_df], axis=0, ignore_index=True)
 
-    print(all_mls_incoming_transfers)
-
     all_mls_incoming_transfers.to_csv('./MLS-Incoming-Transfers-24-25.csv', index=False)
 
     driver.quit()
     return
+
+def transfermarkt_mls_transfers_bs4():
+    # Alternative to original transfermarkt_mls_transfers which exclusively uses Selenium -- performs very slowly
+    # Introducing bs4 to improve performance
+
+    baselink = "http://transfermarkt.com/major-league-soccer/transfers/wettbewerb/MLS1"
+    
+    # Set up chromium driver
+    driverpath = validate_chromedriver()
+    if not driverpath:
+        print("ERROR")
+        return
+
+    chrome_options = webdriver.ChromeOptions()
+    chrome_options.add_argument('log-level=3') # Suppress SSL errors from terminal
+    chrome_options.add_argument('--block-new-web-content')
+
+    service = Service(executable_path=f'{driverpath + '/chromedriver.exe'}')
+    driver = webdriver.Chrome(service=service, options=chrome_options)
+    driver.get(baselink)
+    driver.maximize_window()
+
+    # Define useful variables for scraping procedure
+    original_window = driver.current_window_handle
+    mapClubToLeague = dict()                        # Cache that will map a club to a league
+    concat_dataframes = False                       # Global DF containing all stats will be created for first club, afterwards all other clubs will be concatenated
+    headers = {'User-Agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:138.0) Gecko/20100101 Firefox/138.0"} # Avoid 403 using requests
+    
+    # Switch iframes to close the ad popup that appears
+    try:
+        iframe = WebDriverWait(driver, 10).until(EC.frame_to_be_available_and_switch_to_it((By.XPATH, "//iframe[@id='sp_message_iframe_953358']")))
+        WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//button[text()='Accept & continue']"))).click()
+    except:
+        print("Error: Failed to locate the popup button.")
+
+    # Step out of iframe
+    driver.switch_to.default_content()
+    
+    # All clubs are contained in divs with class "box". Need to select only those divs that are clubs, exclude the rest
+    large8  = WebDriverWait(driver, 10).until(EC.visibility_of_element_located((By.CLASS_NAME, "large-8")))
+    large8bs = BeautifulSoup(large8.get_attribute("innerHTML"), "html.parser")
+    all_clubs = large8bs.find_all("div", class_="box")[3:]
+
+    table_headers = ["JoinedClub", "Age", "Name", "Nationality", "Position", "MarketValue (EUR)", "LeftClub", "LeftLeague", "Fee"]
+
+    for club in all_clubs:
+        club_data_ls = []
+        club_name = club.find("h2").find_all("a")[1].string
+        table = club.find("div", class_ = "responsive-table").find("table")
+        all_rows = table.find("tbody").find_all("tr")
+
+        for row in all_rows:
+            cells = row.find_all("td")
+
+            fee = cells[8].find("a").decode_contents()
+        
+            if ("free" in fee) or ("loan" in fee) or ("draft" in fee) or ("-" in fee):
+                continue    # Skip rows that are not real transfers
+
+            p_name = cells[0].find("div").find("span").find("a").string
+            age = int(cells[1].string)
+            nat = cells[2].find("img")['title']
+            pos = cells[3].string
+            mv = cells[5].string
+            leftCell= cells[6].find("a")
+            leftClub = leftCell['title']
+
+            # Use hyperlink in "Left" cell to find the league of the club the player left
+            if leftClub == "Without Club":
+                leftLeague = ""
+            elif leftClub in mapClubToLeague:
+                leftLeague = mapClubToLeague[leftClub] # Used cached result, if available
+            else:
+                # driver.switch_to.new_window()
+                # driver.get(f"https://www.transfermarkt.com{leftCell["href"]}")
+                r = requests.get(f"https://www.transfermarkt.com{leftCell["href"]}", headers=headers)
+                leagueSoup = BeautifulSoup(r.content, "html.parser")
+
+                try:
+                    leftLeague = leagueSoup.find("div", class_ = "data-header__box--big").find("span", class_="data-header__club").a.string.strip()
+                except:
+                    leftLeague = ""
+
+                # Place the retrieved pairing in the dictionary
+                mapClubToLeague[leftClub] = leftLeague
+            
+            # Covert mv cell to numeric value
+            if "k" in mv:
+                mv_numeric = mv[re.search(r"\d", mv).span()[0]:].rstrip("k")
+                mv_numeric = float(mv_numeric) * 1000
+            elif "m" in mv:
+                mv_numeric = mv[re.search(r"\d", mv).span()[0]:].rstrip("m")
+                mv_numeric = float(mv_numeric) * 1000000
+            
+            # Convert fee cell to numeric value
+            if "k" in fee:
+                fee_numeric = fee[re.search(r"\d", fee).span()[0]:].rstrip("k")
+                fee_numeric = float(fee_numeric) * 1000
+            elif "m" in fee:
+                fee_numeric = fee[re.search(r"\d", fee).span()[0]:].rstrip("m")
+                fee_numeric = float(fee_numeric) * 1000000
+
+            club_data_ls.append([club_name, p_name, age, nat, pos, mv_numeric, leftClub, leftLeague, fee_numeric])
+
+        if not concat_dataframes:
+            # On first pass, simply create the global dataframe since there is nothing to concatenate
+            all_mls_incoming_transfers = pd.DataFrame(club_data_ls, columns=table_headers)
+            concat_dataframes = True
+        else:
+            # For all remaining clubs, concatenate to the global dataframe
+            club_data_df = pd.DataFrame(club_data_ls, columns=table_headers)
+            all_mls_incoming_transfers = pd.concat([all_mls_incoming_transfers, club_data_df], axis=0, ignore_index=True)
+
+    all_mls_incoming_transfers.to_csv('./MLS-Incoming-Transfers-24-25.csv', index=False)
+
+    return
+
