@@ -559,7 +559,7 @@ def transfermarkt_mls_transfers_bs4():
             club_data_df = pd.DataFrame(club_data_ls, columns=table_headers)
             all_mls_incoming_transfers = pd.concat([all_mls_incoming_transfers, club_data_df], axis=0, ignore_index=True)
 
-    all_mls_incoming_transfers.to_csv('./MLS-Incoming-Transfers-24-25.csv', index=False)
+    all_mls_incoming_transfers.to_csv('./MLS-Incoming-Transfers-24-25.csv', index=False, encoding='utf-8-sig')
 
     return
 
